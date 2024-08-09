@@ -1,7 +1,7 @@
 from tf2_msgs.msg import TFMessage
 from geometry_msgs.msg import TransformStamped, Transform
 import numpy as np
-from pyquaternion import Quaternion
+from scipy.spatial.transform import Rotation
 import math
 import copy
 
@@ -13,8 +13,8 @@ class TFPair(object):
         self._angular_thres = angular_thres
         self._trans_thres = trans_thres
 
-        self._tf_transmitted = {'translation':np.array([0.0,0.0,0.0]),'rotation':Quaternion(1.0,0.0,0.0,0.0)}
-        self._tf_received = {'translation':np.array([0.0,0.0,0.0]),'rotation':Quaternion(1.0,0.0,0.0,0.0)}
+        self._tf_transmitted = {'translation':np.array([0.0,0.0,0.0]),'rotation':Rotation.identity()}
+        self._tf_received = {'translation':np.array([0.0,0.0,0.0]),'rotation':Rotation.identity()}
 
         self._last_tf_msg = Transform()
 
@@ -70,7 +70,7 @@ class TFPair(object):
 
     def update_transform(self,update:TransformStamped):
         self._tf_received['translation'] = np.array([update.transform.translation.x,update.transform.translation.y,update.transform.translation.z])
-        self._tf_received['rotation'] = Quaternion(update.transform.rotation.w,update.transform.rotation.x,update.transform.rotation.y,update.transform.rotation.z)
+        self._tf_received['rotation'] = Rotation.from_quat([update.transform.rotation.x, update.transform.rotation.y, update.transform.rotation.z, update.transform.rotation.w])
         self._last_tf_msg = update.transform
         self._updated = True
 
@@ -100,5 +100,8 @@ class TFPair(object):
         return np.linalg.norm(tf1['translation']-tf2['translation'])
 
     @staticmethod
-    def angle(tf1,tf2):
-        return Quaternion.absolute_distance(tf1['rotation'], tf2['rotation'])
+    def angle(tf1, tf2):
+        rot1: Rotation = tf1["rotation"]
+        rot2: Rotation = tf2["rotation"]
+        relative_rotation = rot1.inv() * rot2
+        return np.linalg.norm(relative_rotation.as_rotvec())
